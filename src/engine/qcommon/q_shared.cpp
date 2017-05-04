@@ -518,72 +518,104 @@ static const char *SkipWhitespace( const char *data, bool *hasNewLines )
 
 int COM_Compress( char *data_p )
 {
-	char     *datai, *datao;
-	int      c, size;
-	bool ws = false;
+	char *in, *out;
+	int c;
+	bool newline = false, whitespace = false;
 
-	size = 0;
-	datai = datao = data_p;
-
-	if ( datai )
+	in = out = data_p;
+	if ( in )
 	{
-		while ( ( c = *datai ) != 0 )
+		while ( ( c = *in ) != 0 )
 		{
-			if ( c == 13 || c == 10 )
+			// skip double slash comments
+			if ( c == '/' && in[1] == '/' )
 			{
-				*datao = c;
-				datao++;
-				ws = false;
-				datai++;
-				size++;
-				// skip double slash comments
-			}
-			else if ( c == '/' && datai[ 1 ] == '/' )
-			{
-				while ( *datai && *datai != '\n' )
+				while ( *in && *in != '\n' ) 
 				{
-					datai++;
+					in++;
 				}
-
-				ws = false;
 				// skip /* */ comments
 			}
-			else if ( c == '/' && datai[ 1 ] == '*' )
+			else if ( c == '/' && in[1] == '*' ) 
 			{
-				datai += 2; // Arnout: skip over '/*'
-
-				while ( *datai && ( *datai != '*' || datai[ 1 ] != '/' ) )
+				while ( *in && ( *in != '*' || in[1] != '/' ) )
 				{
-					datai++;
+					in++;
 				}
 
-				if ( *datai )
+				if ( *in )
 				{
-					datai += 2;
+					in += 2;
 				}
 
-				ws = false;
+				// record when we hit a newline
 			}
-			else
+			else if ( c == '\n' || c == '\r' ) 
 			{
-				if ( ws )
+				newline = true;
+				in++;
+				// record when we hit whitespace
+			}
+			else if ( c == ' ' || c == '\t' ) 
+			{
+				whitespace = true;
+				in++;
+				// an actual token
+			}
+			else 
+			{
+				// if we have a pending newline, emit it (and it counts as whitespace)
+				if ( newline ) 
 				{
-					*datao = ' ';
-					datao++;
+					*out++ = '\n';
+					newline = false;
+					whitespace = false;
+				} 
+
+				if ( whitespace )
+				{
+					*out++ = ' ';
+					whitespace = false;
 				}
 
-				*datao = c;
-				datao++;
-				datai++;
-				ws = false;
-				size++;
+				// copy quoted strings unmolested
+				if ( c == '"' )
+				{
+					*out++ = c;
+					in++;
+					while ( 1 )
+					{
+						c = *in;
+						if ( c && c != '"' )
+						{
+							*out++ = c;
+							in++;
+						}
+						else
+						{
+							break;
+						}
+					}
+
+					if ( c == '"' )
+					{
+						*out++ = c;
+						in++;
+					}
+				}
+				else
+				{
+					*out = c;
+					out++;
+					in++;
+				}
 			}
 		}
 
-		*datao = 0;
+		*out = 0;
 	}
 
-	return size;
+	return out - data_p;
 }
 
 char *COM_ParseExt( const char **data_p, bool allowLineBreaks )
